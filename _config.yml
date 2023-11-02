@@ -58,7 +58,7 @@ plugins:
 author:
   name   : "Miloš Ljubinković"
   avatar : "/assets/images/bio-photo.png"
-  bio    : "Miloš"
+  bio    : "Miloš Ljubinković"
   links:
     - label: "Website"
       icon: "fas fa-fw fa-link"

@@ -53,13 +53,3 @@ Java, Spring
 Web development as a part of a team that worked on several startup-like projects, including a webshop aggregator and a social network sentiment analysis tool.
 
 Javascript, Java, MySQL
-
-## EDUCATION
-### Univerzitet Metropolitan, Beograd
-#### OCTOBER 2010
-Faculty of Information Technologies - Software Engineering Full scholarship
-
-## AWARDS
-### Oracle ThinkQuest International Competition 2012 1st Place (18-21 age bracket)
-#### OCTOBER 2012
-Student competition focused on developing and successfully presenting a solution to a real-world problem. Our team’s entry was an educational platform for children with autism developed in partnership with experts and educators.
