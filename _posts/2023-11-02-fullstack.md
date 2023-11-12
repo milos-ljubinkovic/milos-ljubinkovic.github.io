@@ -15,7 +15,7 @@ tags:
 
 In this post we'll go through creating a reliable and easily scalable full-stack solution on AWS with an safe and easy deploy procedure. For hosting the backend server we'll use AWS Lambda. This simplifies the deploy procedure by a lot and gives us a bunch of tools to use in the future in regards to scaling. 
 
-Frontend will be hosted as a static site on S3 sitting behind a Cloudfront distribution and we'll round out the stack with a robust monitoring system that can also be used for automatic rollback in case of errors after a deploy.
+Frontend will be hosted as a simple static site on S3 sitting behind a Cloudfront distribution.
 
 The final stack definition file with some extras can be found at https://github.com/milos-ljubinkovic/full-stack
 
@@ -92,13 +92,13 @@ The Role object is also boilerplate at this point, but in the future we would ex
 
 Now we could end here but this results in a pair of randomly generated immutable URLs, which is something we don't want in our production code. We'll now put the function URLs behind a Cloudfront distribution in order to get some more flexibility within our stack and to help with the future maintainability of the system. 
 
-Cloudfront also gives us some cool stuff as an extra, stuff like:
+Cloudfront also gives us some cool stuff as an extra. Stuff like:
 - Ability to attach [WAF](https://docs.aws.amazon.com/waf/latest/developerguide/what-is-aws-waf.html) to help with security and spam prevention
 - [Cloudfront headers](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/adding-cloudfront-headers.html) for easier user handling and content personalization
 - Logging and monitoring at the networking layer
 - etc
 
-I also added a DNS alias to the distribution through Route53, this isn't necessary as Cloudfront covers most of our routing needs, but it gives us a readable and easier to remember URL. Which is a must if you are working with multiple deployed environments or other people.
+I also added a [Route53](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/Welcome.html) DNS alias to the distribution, this isn't necessary as Cloudfront covers most of our routing needs, but it gives us a readable and easier to remember URL. Which is a must if you are working with multiple deployed environments or just with other people and you want to make sure you are talking about the same deployment.
 
 
 ```
@@ -162,7 +162,7 @@ I also added a DNS alias to the distribution through Route53, this isn't necessa
 
 ## Frontend
 
-Frontend will be hosted on a S3 bucket behind a cloudfront distribution, in this case because of its caching features. similarly as in the APIs case we add an easy-to-read dns to our existing domain
+Frontend will be hosted on a S3 bucket behind a different Cloudfront distribution. 
 
 ```
   S3Bucket:
@@ -251,94 +251,3 @@ We first call package to upload all of the referenced local files to the DEPLOY_
 `aws cloudformation package --template-file ./cf.yml --s3-bucket $DEPLOY_BUCKET  --output-template-file packaged-sam.yaml`
 
 Now you can run `aws cloudformation deploy` on this file with some additional parameters
-
-## Rollback alarm
-
-We create a canary synthetic tester with its own internal logic that's used to determine the health of the deployed environment. It needs an s3 bucket and permissions needed to write the logs to it.
-
-```
-  CanaryBucket:
-    Type: "AWS::S3::Bucket"
-    Properties:
-      BucketName: !Sub "domain-${Name}-${Branch}-canary"
-
-  CanaryRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          Effect: Allow
-          Principal:
-            Service: lambda.amazonaws.com
-          Action: sts:AssumeRole
-      Policies:
-        - PolicyName: allowCanary
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-            - Effect: Allow
-              Action:
-              - s3:PutObject
-              - s3:GetObject
-              Resource:
-              - !GetAtt CanaryBucket.Arn
-            - Effect: Allow
-              Action:
-              - s3:GetBucketLocation
-              Resource:
-              - !GetAtt CanaryBucket.Arn
-            - Effect: Allow
-              Action:
-              - logs:CreateLogStream
-              - logs:PutLogEvents
-              - logs:CreateLogGroup
-              Resource:
-              - "*"
-            - Effect: Allow
-              Action:
-              - s3:ListAllMyBuckets
-              - xray:PutTraceSegments
-              Resource:
-              - "*"
-            - Effect: Allow
-              Resource: "*"
-              Action: cloudwatch:PutMetricData
-              Condition:
-                StringEquals:
-                  cloudwatch:namespace: CloudWatchSynthetics
-
-  SyntheticsCanary:
-      Type: 'AWS::Synthetics::Canary'
-      Properties:
-          Name: !Join ['', ['canary_', !Ref ENVIRONMENT]]
-          ExecutionRoleArn: !Ref CanaryRole
-          Code: {Handler: pageLoadBlueprint.handler, Script: "const synthetics = require('Synthetics');\n\nconst apiCanaryBlueprint = async function () {\n    const validateSuccessful = async function (res) {\n        return new Promise((resolve, reject) => {\n            if (res.statusCode < 200 || res.statusCode > 299) {\n                throw new Error(res.statusCode + ' ' + res.statusMessage);\n            }\n            res.on('end', () => {\n                resolve();\n            });\n        });\n    };\n\n    let request = {\n        hostname: 'api-'+process.env.ENVIRONMENT+'.helbizscooters.com',\n        method: 'GET',\n        path: '/health',\n        port: '443',\n        protocol: 'https:',\n        body: '',\n        headers: {\n            'User-Agent': synthetics.getCanaryUserAgentString()\n        }\n    };\n    let config = {\n        includeRequestHeaders: false,\n        includeResponseHeaders: false,\n        includeRequestBody: false,\n        includeResponseBody: false,\n        continueOnHttpStepFailure: true\n    };\n\n    await synthetics.executeHttpStep('Verify api', request, validateSuccessful, config);\n    request.path = '/live/healthcheck';\n    await synthetics.executeHttpStep('Verify live', request, validateSuccessful, config);\n};\n\nexports.handler = async () => {\n    return await apiCanaryBlueprint();\n};"}
-          ArtifactS3Location: s3://      canray bucket
-          RuntimeVersion: syn-nodejs-puppeteer-3.9
-          RunConfig: 
-
-          Schedule: {Expression: 'rate(1 minute)', DurationInSeconds: 3600}
-          RunConfig: {TimeoutInSeconds: 60}
-          FailureRetentionPeriod: 30
-          SuccessRetentionPeriod: 30
-          StartCanaryAfterCreation: true
-
-  CanaryAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmDescription: Canary health check
-      AlarmName: !Join ['', ['canaryalarm', !Ref ENVIRONMENT]]
-      ComparisonOperator: LessThanLowerOrGreaterThanUpperThreshold
-      MetricName: SuccessPercent
-      Namespace: CloudWatchSynthetics
-      Statistic: Average
-      Period: 120
-      EvaluationPeriods: 1
-      Threshold: 99
-      Dimensions:
-        - Name: CanaryName
-          Value: !Join ['', ['canary_', !Ref ENVIRONMENT]]
-      ComparisonOperator: LessThanThreshold
-
-```
