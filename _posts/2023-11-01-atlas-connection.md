@@ -1,8 +1,6 @@
 ---
 title: "Making a fully compliant Mongo Atlas connection"
 date: 2023-11-01T15:34:30-04:00
-header:
-  image: /assets/images/monbgoiam.png
 categories:
     - blog
 tags:
@@ -11,8 +9,8 @@ tags:
     - Compliance
 ---
 
+![image](/assets/images/monbgoiam.png)
 # Making a compliant Mongo Atlas database connection
-
 ## Why
 
 Let's say we want to connect to a Mongo Atlas cluster somewhere from our AWS account. The default auth type is username/password but this isn't all that suitable for a massive production system. Even if we limit network access to our VPC, use AWS Secrets Manager for storing passwords and our servers retrieve them at runtime, we have no possible way to verify that they aren't also stored and used from somewhere else in the company. Any auditor working on getting you a ISO/IEC 27001 or similar certification would show you this deficiency in the system and would demand additional proof that unauthorized personnel don't have unrestricted access to the database.
@@ -43,7 +41,7 @@ First, create a role without any permissions in AWS IAM. This will be the our de
 
 Now let's go to Mongo Atlas and create a new Database access user on your cluster:
 
-![image](../assets/images/mongo1.png)
+![image](/assets/images/mongo1.png)
 
 Pick AWS IAM as the auth method and IAM Role as IAM Type. Then copy the ARN of the role we created in the previous step.
 
