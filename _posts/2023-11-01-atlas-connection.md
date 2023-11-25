@@ -1,6 +1,7 @@
 ---
 title: "Forget Mongo Passwords: AWS IAM Atlas Authentication"
-date: 2023-11-01T15:34:30-04:00
+date: 2023-11-15T15:34:30-04:00
+last_modified_at: 2023-11-25T15:34:30-04:00
 categories:
     - blog
 tags:
@@ -97,28 +98,26 @@ Additional documentation on this [link](https://www.mongodb.com/docs/atlas/secur
 
 ## Server Connection Example
 
-Going over to the connection
-
 On the server side we first assume the Mongo connection role, extract credentials from it and create a new connection string using them like this: [^1]
 
 ```typescript
-  import { STS } from '@aws-sdk/client-sts';
-   // ... //
-  let role = await new AWS.STS({region: 'eu-west-1',}).assumeRole({
-    RoleArn: process.env.MONGO_ROLE!,
-    RoleSessionName: 'connection-server-' + Date.now(),
-  });
+    import { STS } from '@aws-sdk/client-sts';
+    // ... //
+    let role = await new AWS.STS({region: 'eu-west-1',}).assumeRole({
+      RoleArn: process.env.MONGO_ROLE!,
+      RoleSessionName: 'connection-server-' + Date.now(),
+    });
 
-  const dbURL = new URL(`mongodb+srv://${process.env.MONGO_HOST}/${process.env.MONGO_DB}`);
-  dbURL.username = role?.Credentials?.AccessKeyId;
-  dbURL.password = role?.Credentials?.SecretAccessKey;
-  dbURL.searchParams.append('authSource', '$external');
-  dbURL.searchParams.append('authMechanism', 'MONGODB-AWS');
-  dbURL.searchParams.append('authMechanismProperties', `AWS_SESSION_TOKEN:${role?.Credentials?.SessionToken}`);
-  process.env.MONGO_STR = dbURL.href;
-  let dbClient = new MongoClient(process.env.MONGO_STR, {});
-  await dbClient.connect();
-  let DB = dbClient.db();
+    const dbURL = new URL(`mongodb+srv://${process.env.MONGO_HOST}/${process.env.MONGO_DB}`);
+    dbURL.username = role?.Credentials?.AccessKeyId;
+    dbURL.password = role?.Credentials?.SecretAccessKey;
+    dbURL.searchParams.append('authSource', '$external');
+    dbURL.searchParams.append('authMechanism', 'MONGODB-AWS');
+    dbURL.searchParams.append('authMechanismProperties', `AWS_SESSION_TOKEN:${role?.Credentials?.SessionToken}`);
+    process.env.MONGO_STR = dbURL.href;
+    let dbClient = new MongoClient(process.env.MONGO_STR, {});
+    await dbClient.connect();
+    let DB = dbClient.db();
 ```
 
 In this code snippet the environment variables **MONGO_HOST**, **MONGO_DB** and **MONGO_ROLE** are used respectively for the Mongo cluster domain, database name and the previously created **"MongoAccessRole"** role.
@@ -156,11 +155,13 @@ Now this is troublesome and I fear that passwords would creep back in if we mand
 
 ## Monitoring
 
-While we made sure through the trust policy that only the lambda role can assume the mongo role we can also add some monitoring just to make sure.
+While we made sure that only the lambda role and database admins can assume the **MongoConnectionRole** we can also add some monitoring just to make sure.
 
-We can use AWS CloudTrail for this, as it allows us to log all AssumeRole and similar events. Just create a new trail [here](https://eu-west-1.console.aws.amazon.com/cloudtrail/home?region=eu-west-1#/create) and make sure you enable CloudWatch logs for better readability through the CW tools instead of reading raw files on S3.[^3]
+We can use AWS CloudTrail for this, as it allows us to log all AssumeRole and similar events. Just create a new trail [here](https://eu-west-1.console.aws.amazon.com/cloudtrail/home?region=eu-west-1#/create) and make sure you enable CloudWatch logs for better readability through the CloudWatch tools instead of reading raw files on S3.[^3]
 
-After creating the trail and several minutes of operation we can check and see if it's working through the CloudWatch Logs Insights feature. Use the following query on the CloudWatch log group you created together with the trail. Just plug into the query the name of the mongo connection role:
+After creating the trail and several minutes of operation we can check and see if everything's working using the CloudWatch Logs Insights.
+
+ Use the following query on the CloudWatch log group you created together with the trail. Just plug the full ARN of the role into the query:
 
 ```
 fields @timestamp,
@@ -170,9 +171,13 @@ userIdentity.principalId' as identity, sourceIPAddress, userIdentity.sessionCont
 
 ```
 
-You will get a table of all of the different identities which tried to assume the connection role and their IP addresses.
+You will get a table of all of the different identities which tried to assume the connection role and their IP addresses like this:
 
-If necessary you can setup a CloudWatch alarm on this log group which would notify you if somehow someone else assumes the connection role.
+
+![image](/assets/images/logs.png)
+
+
+If necessary you can setup a CloudWatch alarm on this log group which will notify you if somehow someone else assumes the connection role or if a weird IP appears. Instructions can be found [here](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/cloudwatch-metrics-insights-alarm-create.html)
 
 ## Links and Documentation
 
