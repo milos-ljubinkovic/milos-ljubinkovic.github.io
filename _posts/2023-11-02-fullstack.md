@@ -7,13 +7,14 @@ tags:
   - AWS
   - Cloudformation
   - Devops
+toc: true
+toc_label: "Contents"
+toc_icon: "book-open"
 ---
-
-# Fullstack Cloudformation stack with rollback
 
 ## Intro
 
-In this post we'll go through creating a reliable and easily scalable full-stack solution on AWS with an safe and easy deploy procedure. For hosting the backend server we'll use AWS Lambda. This simplifies the deploy procedure by a lot and gives us a bunch of tools to use in the future in regards to scaling. 
+In this post we'll go through creating a reliable and easily scalable full-stack solution on AWS with a safe and easy deploy procedure. For hosting the backend server we'll use AWS Lambda. This simplifies the deploy procedure by a lot and gives us a bunch of tools to use in the future in regards to monitoring and scaling. 
 
 Frontend will be hosted as a simple static site on S3 sitting behind a Cloudfront distribution.
 
@@ -40,7 +41,7 @@ FunctionURLs are just boilerplate plugins to the lambda functions that'll allow 
 The Role object is also boilerplate at this point, but in the future we would expand this role with other policies if we need the lambdas to access other AWS services or resources.
 
 
-```
+```yml
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -101,7 +102,7 @@ Cloudfront also gives us some cool stuff as an extra. Stuff like:
 I also added a [Route53](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/Welcome.html) DNS alias to the distribution, this isn't necessary as Cloudfront covers most of our routing needs, but it gives us a readable and easier to remember URL. Which is a must if you are working with multiple deployed environments or just with other people and you want to make sure you are talking about the same deployment.
 
 
-```
+```yml
   CloudFrontDistribution:
     DependsOn:
       - BlogsFunctionURL
@@ -251,3 +252,10 @@ We first call package to upload all of the referenced local files to the DEPLOY_
 `aws cloudformation package --template-file ./cf.yml --s3-bucket $DEPLOY_BUCKET  --output-template-file packaged-sam.yaml`
 
 Now you can run `aws cloudformation deploy` on this file with some additional parameters
+
+
+## Cost breakdown
+
+S3: Negligible, storage costs 2 cents per GB monthly and data transfer costs are offloaded to Cloudfront
+Cloudfront: First TB or the first 10,000,000 requests per month free
+Lambda: First 1 million requests per month are free, afterwards 0.0000167 per GB second (1mil 50ms requests at 512MB )
