@@ -21,6 +21,7 @@ description: >- # this means to ignore newlines until "baseurl:"
 github_username: milos-ljubinkovic
 minimal_mistakes_skin: default
 search: true
+repository: milos-ljubinkovic/milos-ljubinkovic.github.io
 
 # Build settings
 markdown: kramdown
@@ -54,6 +55,7 @@ plugins:
   - jekyll-feed
   - jemoji
   - jekyll-include-cache
+  - "jekyll-github-metadata"
 
 author:
   name   : "Miloš Ljubinković"
