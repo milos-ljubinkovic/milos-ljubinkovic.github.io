@@ -14,6 +14,13 @@ toc_label: "Contents"
 toc_icon: "book-open"
 ---
 
+<style>
+    .page__content {
+        text-align: justify;
+    }
+</style>
+
+
 ![image](/assets/images/monbgoiam.png)
 
 ## Why
