@@ -16,3 +16,5 @@ group :jekyll_plugins do
   gem "jekyll-algolia"
   gem "jekyll-github-metadata"
 end
+
+gem "webrick", "~> 1.8"
