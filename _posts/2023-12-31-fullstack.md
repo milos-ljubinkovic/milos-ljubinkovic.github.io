@@ -1,6 +1,7 @@
 ---
-title: "Fullstack solution in a single Cloudformation template - WIP"
+title: "Fullstack solution in a single Cloudformation template"
 date: 2023-12-07T00:00:00-00:00
+last_modified_at: 2024-01-03T00:00:00-00:00
 categories:
   - blog
 tags:
