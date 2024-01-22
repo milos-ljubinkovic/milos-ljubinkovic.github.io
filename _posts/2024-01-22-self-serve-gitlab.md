@@ -1,6 +1,7 @@
 ---
-title: "Self-Service testing environment(s)"
-date: 2024-01-22T15:34:30-04:00
+title: "Self-Service testing environment"
+date: 2024-01-21T15:34:30-04:00
+last_modified_at: 2024-01-22T00:00:00-00:00
 categories:
   - blog
 tags:
@@ -16,6 +17,9 @@ toc_icon: "book-open"
 <style>
     .page__content {
         text-align: justify;
+    }
+    .footnotes {
+      text-align: left;
     }
 </style>
 
@@ -40,10 +44,6 @@ We wanted to give the ability to the developers to create and destroy environmen
 
 One option was to create a brand new dashboard for this or go with a custom one. Luckily the combination of gitlab and cloudformation allowed us to use the already existing CI/CD pipelines with some smaller changes.
 
-
-## Cloudformation
-
-We start with a basi
 
 ## Gitlab
 
@@ -118,9 +118,9 @@ Now there are 2 different ways we can do this. We can use the `cloudformation de
 
 We will name our stack: `stack-$CI_COMMIT_REF_SLUG` which will resolve in gitlab runner to the slug of the current branch branch if the trigger for the pipeline is a commit. And we will setup rules so that `create` can't trigger on the master branch and requires a manual step on other branches, and that updating the master branch stack requires a manual confirmation and is automatic on all other branches.
 
+We use the same slug variable to name our Gitlab CICD environment. This allow us later have a handy overview of all gitlab deployed environments, and to specify permissions on environment level.[^1]
 
 ```yaml
-
 create-stack:
     stage: deploy
     image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest
@@ -128,6 +128,8 @@ create-stack:
     script:
         - aws cloudformation package --template-file ./cf.yml --s3-bucket $DEPLOY_BUCKET  --output-template-file packaged-sam.yaml
        - aws cloudformation deploy --template-file packaged-sam.yaml  --stack-name stack-$CI_COMMIT_REF_SLUG --capabilities CAPABILITY_NAMED_IAM CAPABILITY_IAM CAPABILITY_AUTO_EXPAND --parameter-override BRANCH=$CI_COMMIT_REF_SLUG --s3-bucket deploy-bucket-841805187071
+    environment:
+      name: $CI_COMMIT_REF_SLUG
     rules:
         - if: '$CI_COMMIT_BRANCH != "master"'
           when: manual
@@ -142,6 +144,7 @@ update-cf:
         - aws cloudformation get-template-summary --stack-name stack-$CI_COMMIT_REF_SLUG > /dev/null
         - aws cloudformation package --template-file ./cf.yml --s3-bucket $DEPLOY_BUCKET  --output-template-file packaged-sam.yaml
         - aws cloudformation deploy --template-file packaged-sam.yaml  --stack-name stack-$CI_COMMIT_REF_SLUG --capabilities CAPABILITY_NAMED_IAM CAPABILITY_IAM CAPABILITY_AUTO_EXPAND --parameter-override BRANCH=$CI_COMMIT_REF_SLUG --s3-bucket $DEPLOY_BUCKET
+    name: $CI_COMMIT_REF_SLUG
     rules:
         - if: '$CI_COMMIT_BRANCH !=  "master"'
         - if: '$CI_COMMIT_BRANCH == "master"'
@@ -162,7 +165,7 @@ aws s3 rm s3://BUCKET --recursive
 aws s3api delete-bucket --bucket "BUCKET"
 ```
 
-Or as a safe solution you can put a flag in the Cloudformation template to retain the bucket even after you delete the stack like this:[1]
+Or as a safe solution you can put a flag in the Cloudformation template to retain the bucket even after you delete the stack like this:[^2]
 
 ```yaml
 Resources:
@@ -179,6 +182,8 @@ delete-stack:
     script:
         - aws cloudformation delete-stack --stack-name stack-$CI_COMMIT_REF_SLUG
         - aws cloudformation wait stack-delete-complete --stack-name stack-$CI_COMMIT_REF_SLUG 
+    environment:
+      name: $CI_COMMIT_REF_SLUG
     rules:
         - if: '$CI_COMMIT_BRANCH != "master"'
           when: manual
@@ -188,4 +193,6 @@ delete-stack:
 
 
 
-^[1] AWS Deletion policy https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-deletionpolicy.html
+[^1]: Gitlab Protected environments https://docs.gitlab.com/ee/ci/environments/protected_environments.html
+
+[^2]: AWS Deletion policy https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-deletionpolicy.html

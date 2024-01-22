@@ -17,6 +17,9 @@ toc_icon: "book-open"
     .page__content {
         text-align: justify;
     }
+    .footnotes {
+      text-align: left;
+    }
 </style>
 
 ![image](/assets/images/burger.png)
