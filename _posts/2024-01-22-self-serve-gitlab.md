@@ -36,7 +36,7 @@ This worked for a while but as the company grew it caused issues. Things sometim
 We quickly added another staging environment/branch pair for code that was ready for final testing and all deployment was done from this branch after final testing passed
 
 Eventually 2 issues appeared. One, sometimes out of the multiple changes on the staging environment only some were approved by the manager. This slowed down development as the environment had to be tested all over again after taking out the unapproved changes.
-Second, as the team increased having multiple devs working on a single development environment sometimes caused issues and downtime due to conflicts. 
+Second, as the team increased having multiple developers working on a single development environment sometimes caused issues and downtime due to conflicts. 
 
 Eventually we decided to start working with multiple short-lived environments which would be forked from master on demand. Every larger issue in a sprint would get their own environment created and smaller ones like bugfixes could be bundled up in a single one. After developers finished, the unique environment will get into the hands of the QA department and after it passed and final approvals were given the deployment would be done directly from the unique environment to master.
 
@@ -88,23 +88,15 @@ stages:
     - build
     - deploy
 
-
 prebuild:
     stage: prebuild
     script:
-        - echo secrets > .env
-    artifacts:
-        paths:
-            - .env
+        - echo secrets
 
 build:
     stage: build
     script:
         - mkdir dist
-        - echo scripts > ./dist/app.js
-    artifacts:
-        paths:
-            - dist/**
 
 ```
 
@@ -114,20 +106,19 @@ We wish to create 2 steps, one manual which will create a new cloudformation sta
 
 We can perform the check for the existence of the stack with the `aws cloudformation get-template-summary NAME` command, which will exit with a failure code if a stack with that name doesn't exits and make the step `allow_failure: true`. This isn't optimal as the step will be rendered with a yellow ! in gitlab's UI in this case, possibly causing some confusion. But we will keep it like this for now because gitlab doesn't allow for an easy way for a job to affect the flow of a pipeline.
 
-Now there are 2 different ways we can do this. We can use the `cloudformation deploy` command for both, or use a combination of `cloudformation create-stack` and `cloudformation update-stack`. The `deploy` command is simpler and easier to use but lacks some of the more granular options in the `update/create` CLI commands like rollbacks and stack policies. For now lets go with just deploy, but in a later blog I'll demonstrate how to implement automatic stack rollback on server errors using the `update-stack` command.
+Now there are 2 different ways we can do this. We can use the `cloudformation deploy` command for both, or use a combination of `cloudformation create-stack` and `cloudformation update-stack`. The `deploy` command is simpler and easier to use but lacks some of the more granular options in the `update/create` CLI commands like rollbacks and stack policies.[^1] For now lets go with just deploy, but in a later blog I'll demonstrate how to implement automatic stack rollback on server errors using the `update-stack` command.
 
 We will name our stack: `stack-$CI_COMMIT_REF_SLUG` which will resolve in gitlab runner to the slug of the current branch branch if the trigger for the pipeline is a commit. And we will setup rules so that `create` can't trigger on the master branch and requires a manual step on other branches, and that updating the master branch stack requires a manual confirmation and is automatic on all other branches.
 
-We use the same slug variable to name our Gitlab CICD environment. This allow us later have a handy overview of all gitlab deployed environments, and to specify permissions on environment level.[^1]
+We use the same slug variable to name our Gitlab CICD environment. This allow us later have a handy overview of all gitlab deployed environments, and to specify permissions on environment level.[^2]
 
 ```yaml
 create-stack:
     stage: deploy
-    image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest
     allow_failure: true
     script:
         - aws cloudformation package --template-file ./cf.yml --s3-bucket $DEPLOY_BUCKET  --output-template-file packaged-sam.yaml
-       - aws cloudformation deploy --template-file packaged-sam.yaml  --stack-name stack-$CI_COMMIT_REF_SLUG --capabilities CAPABILITY_NAMED_IAM CAPABILITY_IAM CAPABILITY_AUTO_EXPAND --parameter-override BRANCH=$CI_COMMIT_REF_SLUG --s3-bucket deploy-bucket-841805187071
+       - aws cloudformation deploy --template-file packaged-sam.yaml  --stack-name stack-$CI_COMMIT_REF_SLUG --capabilities CAPABILITY_NAMED_IAM CAPABILITY_IAM CAPABILITY_AUTO_EXPAND --parameter-override BRANCH=$CI_COMMIT_REF_SLUG --s3-bucket $DEPLOY_BUCKET
     environment:
       name: $CI_COMMIT_REF_SLUG
     rules:
@@ -138,7 +129,6 @@ create-stack:
 
 update-cf:
     stage: deploy
-    image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest
     allow_failure: true
     script:
         - aws cloudformation get-template-summary --stack-name stack-$CI_COMMIT_REF_SLUG > /dev/null
@@ -165,7 +155,7 @@ aws s3 rm s3://BUCKET --recursive
 aws s3api delete-bucket --bucket "BUCKET"
 ```
 
-Or as a safe solution you can put a flag in the Cloudformation template to retain the bucket even after you delete the stack like this:[^2]
+Or as a safe solution you can put a flag in the Cloudformation template to retain the bucket even after you delete the stack like this:[^3]
 
 ```yaml
 Resources:
@@ -177,8 +167,6 @@ Resources:
 ```yaml
 delete-stack:
     stage: .post
-    image: registry.gitlab.com/gitlab-org/cloud-deploy/aws-base:latest
-    needs: []
     script:
         - aws cloudformation delete-stack --stack-name stack-$CI_COMMIT_REF_SLUG
         - aws cloudformation wait stack-delete-complete --stack-name stack-$CI_COMMIT_REF_SLUG 
@@ -191,8 +179,6 @@ delete-stack:
           when: never
 ```
 
-
-
-[^1]: Gitlab Protected environments https://docs.gitlab.com/ee/ci/environments/protected_environments.html
-
-[^2]: AWS Deletion policy https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-deletionpolicy.html
+[^1]: AWS CLI Cloudformation Documentation https://awscli.amazonaws.com/v2/documentation/api/latest/reference/cloudformation/index.html#cli-aws-cloudformation
+[^2]: Gitlab Protected environments https://docs.gitlab.com/ee/ci/environments/protected_environments.html
+[^3]: AWS Deletion policy https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-deletionpolicy.html
